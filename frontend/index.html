@@ -1,0 +1,417 @@
+  <!doctype html>
+  <html lang="en">
+  <head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>StoryForge — AI Voice Story Narrator</title>
+
+  <style>
+    :root{
+      --glass-bg: rgba(255,255,255,0.08);
+      --glass-border: rgba(255,255,255,0.12);
+      --accent: #7c3aed; /* purple */
+      --accent-2: #06b6d4; /* cyan */
+      --muted: #cbd5e1;
+      --text: #e6eef8;
+      --card-radius: 14px;
+    }
+
+    /* Page background - animated gradient + user-supplied image blended */
+    html,body{
+      height:100%;
+      margin:0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      color:var(--text);
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+      background: linear-gradient(120deg, rgba(20,20,40,1) 0%, rgba(10,10,30,1) 100%);
+      overflow-y:auto;
+    }
+
+    /* Animated gradient layer */
+    .bg-gradient {
+      position:fixed; inset:0; z-index:-2;
+      background: linear-gradient(90deg, rgba(32,6,55,0.6), rgba(5,20,50,0.6), rgba(3,35,45,0.6));
+      background-size: 300% 300%;
+      animation: gradientShift 18s ease infinite;
+      mix-blend-mode: screen;
+      filter: blur(30px) saturate(120%);
+      opacity:0.9;
+    }
+    @keyframes gradientShift {
+      0%{background-position:0% 50%}
+      50%{background-position:100% 50%}
+      100%{background-position:0% 50%}
+    }
+
+    /* Background image layer using user's uploaded file */
+    .bg-image {
+      position:fixed; inset:0; z-index:-3;
+      background-image: url("/mnt/data/Screenshot 2025-11-23 225827.png");
+      background-position: center;
+      background-size: cover;
+      opacity:0.14;
+      filter: grayscale(40%) contrast(90%);
+    }
+
+    .layout {
+      max-width:1100px; margin:40px auto; padding:28px;
+    }
+
+    .card {
+      background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+      border: 1px solid var(--glass-border);
+      border-radius: var(--card-radius);
+      backdrop-filter: blur(10px) saturate(120%);
+      -webkit-backdrop-filter: blur(10px) saturate(120%);
+      box-shadow: 0 8px 30px rgba(2,6,23,0.6);
+      padding:28px;
+      color:var(--text);
+      display:grid;
+      gap:18px;
+    }
+
+    .header {
+      display:flex; align-items:center; justify-content:space-between; gap:12px;
+    }
+    .brand {
+      display:flex; gap:14px; align-items:center;
+    }
+    .logo {
+      width:52px; height:52px; border-radius:12px;
+      background: linear-gradient(135deg,var(--accent),var(--accent-2));
+      display:flex; align-items:center; justify-content:center;
+      font-weight:700; font-size:20px;
+      box-shadow: 0 6px 18px rgba(124,58,237,0.18), inset 0 -6px 18px rgba(0,0,0,0.08);
+    }
+    .title {
+      font-size:20px; font-weight:700;
+      letter-spacing: -0.2px;
+    }
+    .subtitle { color:var(--muted); font-size:13px; margin-top:4px; }
+
+    /* Controls area */
+    .controls {
+      display:flex; gap:14px; align-items:center; flex-wrap:wrap;
+    }
+
+    /* Mic button (glass + animated) */
+    .mic-wrap { display:flex; align-items:center; gap:12px; }
+    .mic-btn {
+      width:72px; height:72px; border-radius:20px;
+      display:flex; align-items:center; justify-content:center;
+      background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+      border:1px solid rgba(255,255,255,0.08);
+      cursor:pointer; position:relative;
+      transition: transform .14s ease, box-shadow .14s ease;
+      box-shadow: 0 6px 18px rgba(3,7,18,0.6);
+    }
+    .mic-btn:hover { transform: translateY(-3px); box-shadow:0 12px 28px rgba(3,7,18,0.7); }
+
+    .mic-icon {
+      width:36px; height:36px; border-radius:8px;
+      background: linear-gradient(180deg,var(--accent),var(--accent-2));
+      display:flex; align-items:center; justify-content:center; color:#fff; font-weight:700;
+      box-shadow: 0 6px 18px rgba(124,58,237,0.18);
+    }
+
+    /* Recording ripple */
+    .mic-btn.recording::after {
+      content:"";
+      position:absolute; width:92px; height:92px; border-radius:22px;
+      left:50%; top:50%; transform:translate(-50%,-50%);
+      border:2px solid rgba(124,58,237,0.12);
+      animation: pulse 1.6s infinite ease-out;
+      pointer-events:none;
+    }
+    @keyframes pulse {
+      0% { transform: translate(-50%,-50%) scale(0.95); opacity:0.9; }
+      70% { transform: translate(-50%,-50%) scale(1.35); opacity:0.06; }
+      100% { transform: translate(-50%,-50%) scale(1.6); opacity:0; }
+    }
+
+    /* Waveform bars while recording */
+    .wave {
+      width:120px; display:flex; gap:4px; align-items:flex-end; height:40px;
+    }
+    .bar {
+      width:6px; background: linear-gradient(180deg,var(--accent),var(--accent-2));
+      border-radius:4px;
+      transform-origin:bottom;
+      animation: bounce 0.9s infinite ease-in-out;
+      opacity:0.95;
+    }
+    .bar:nth-child(1){ animation-delay:0s }
+    .bar:nth-child(2){ animation-delay:0.08s }
+    .bar:nth-child(3){ animation-delay:0.16s }
+    .bar:nth-child(4){ animation-delay:0.24s }
+    .bar:nth-child(5){ animation-delay:0.32s }
+    @keyframes bounce {
+      0%{ transform: scaleY(0.35) } 50%{ transform: scaleY(1.0) } 100%{ transform: scaleY(0.35) }
+    }
+    .wave.paused .bar { animation-play-state:paused; opacity:0.35 }
+
+    /* Input & generate button */
+    .input-row { display:flex; gap:12px; align-items:center; flex:1; min-width:320px; }
+    .input-row input[type="text"] {
+      flex:1; padding:12px 14px; border-radius:10px; border:1px solid rgba(255,255,255,0.06);
+      background: rgba(255,255,255,0.02); color:var(--text); font-size:15px;
+    }
+    .select {
+      padding:10px 12px; border-radius:10px; border:1px solid rgba(255,255,255,0.06);
+      background: rgba(255,255,255,0.02); color:var(--text);
+    }
+
+    .generate-btn {
+      padding:12px 18px; border-radius:10px; border:none; cursor:pointer;
+      background: linear-gradient(90deg,var(--accent),var(--accent-2));
+      color:white; font-weight:600; box-shadow: 0 8px 26px rgba(55,0,120,0.12);
+    }
+    .generate-btn:active { transform: translateY(1px); }
+
+    /* Log / result card */
+    #log {
+      padding:14px; border-radius:10px; background: linear-gradient(180deg, rgba(0,0,0,0.22), rgba(255,255,255,0.01));
+      border:1px solid rgba(255,255,255,0.04); color:var(--muted); min-height:54px;
+    }
+
+    /* Custom audio player */
+    .player {
+      margin-top:14px; display:flex; align-items:center; gap:12px; padding:10px;
+      background: rgba(255,255,255,0.02); border-radius:10px; border:1px solid rgba(255,255,255,0.04);
+    }
+    .play-btn {
+      width:48px; height:48px; border-radius:12px; display:flex; align-items:center; justify-content:center;
+      background: linear-gradient(180deg,#0ea5a9,#06b6d4); border:none; color:#042022; font-weight:700; cursor:pointer;
+    }
+    .time { font-size:13px; color:var(--muted); min-width:60px; text-align:center; }
+
+    .progress {
+      -webkit-appearance:none; appearance:none; height:8px; border-radius:10px; background:rgba(255,255,255,0.06); width:100%;
+      outline:none;
+    }
+    .progress::-webkit-slider-thumb { -webkit-appearance:none; width:14px; height:14px; border-radius:50%; background:linear-gradient(180deg,#fff,#ddd); box-shadow:0 2px 8px rgba(0,0,0,0.4); cursor:pointer; }
+
+    .actions { display:flex; gap:8px; align-items:center; }
+
+    /* Footer small */
+    .meta { display:flex; gap:10px; align-items:center; color:var(--muted); font-size:13px; margin-top:12px; }
+    .badge { background: rgba(255,255,255,0.03); padding:6px 10px; border-radius:999px; border:1px solid rgba(255,255,255,0.02); }
+
+    /* Responsive */
+    @media (max-width:880px){
+      .controls { flex-direction:column; align-items:stretch; }
+      .mic-wrap { justify-content:space-between; }
+      .input-row { width:100% }
+    }
+  </style>
+  </head>
+  <body>
+    <div class="bg-image" aria-hidden="true"></div>
+    <div class="bg-gradient" aria-hidden="true"></div>
+
+    <div class="layout">
+      <div class="card">
+        <div class="header">
+          <div class="brand">
+            <div class="logo">SF</div>
+            <div>
+              <div class="title">StoryForge</div>
+              <div class="subtitle">AI Voice Story Narrator — glass UI</div>
+            </div>
+          </div>
+
+          <div class="meta">
+            <div class="badge">Mic: built-in</div>
+            <div class="badge">TTS: gTTS (demo)</div>
+          </div>
+        </div>
+
+        <div class="controls">
+          <div class="mic-wrap" style="align-items:center;">
+            <div id="micBtn" class="mic-btn" title="Record / Stop">
+              <div id="micIcon" class="mic-icon">🎤</div>
+            </div>
+
+            <div class="wave" id="waveform" aria-hidden="true">
+              <div class="bar" style="height:20%"></div>
+              <div class="bar" style="height:60%"></div>
+              <div class="bar" style="height:40%"></div>
+              <div class="bar" style="height:75%"></div>
+              <div class="bar" style="height:30%"></div>
+            </div>
+          </div>
+
+          <div class="input-row">
+            <input id="manualInput" type="text" placeholder="Type any story keyword (e.g., 'student', 'dragon', 'mystery')" />
+            <select id="lengthSelect" class="select">
+              <option value="short">Short (~1 min)</option>
+              <option value="medium" selected>Medium (~3 min)</option>
+              <option value="long">Long (~5 min)</option>
+            </select>
+            <button id="sendBtn" class="generate-btn">Generate Story</button>
+          </div>
+        </div>
+
+        <div id="log">Ready — click <strong>🎤</strong> to record or type a keyword and press <strong>Generate Story</strong>.</div>
+
+        <div class="player" id="playerBox" style="display:none;">
+          <button id="playBtn" class="play-btn">▶</button>
+          <div style="flex:1; display:flex; gap:12px; align-items:center;">
+            <input id="progress" class="progress" type="range" min="0" max="100" value="0" step="0.1" />
+          </div>
+          <div class="time" id="time">0:00 / 0:00</div>
+          <div class="actions">
+            <a id="downloadLink" class="badge" href="#" download>Download</a>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  <script>
+  /* Frontend logic: recording, send to server, play/controls.
+    Uses same backend endpoints: POST /transcribe, POST /generate_story, GET /audio/<file>
+  */
+  const micBtn = document.getElementById('micBtn');
+  const micIcon = document.getElementById('micIcon');
+  const waveform = document.getElementById('waveform');
+  const manualInput = document.getElementById('manualInput');
+  const lengthSelect = document.getElementById('lengthSelect');
+  const sendBtn = document.getElementById('sendBtn');
+  const log = document.getElementById('log');
+
+  const playerBox = document.getElementById('playerBox');
+  const playBtn = document.getElementById('playBtn');
+  const progress = document.getElementById('progress');
+  const timeEl = document.getElementById('time');
+  const downloadLink = document.getElementById('downloadLink');
+
+  let mediaRecorder, audioChunks = [];
+  let audioUrl = null;
+  let audioEl = new Audio();
+  let isRecording = false;
+
+  // Helper: set UI state for recording
+  function setRecording(on){
+    isRecording = on;
+    micBtn.classList.toggle('recording', on);
+    waveform.classList.toggle('paused', !on);
+    micIcon.textContent = on ? '⏺️' : '🎤';
+    log.textContent = on ? '🔴 Recording... Say your keyword now.' : '⏳ Processing audio...';
+  }
+
+  // Start/stop recording
+  micBtn.addEventListener('click', async () => {
+    if (!isRecording) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
+        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+        mediaRecorder.onstart = () => setRecording(true);
+        mediaRecorder.onstop = async () => {
+          setRecording(false);
+          const blob = new Blob(audioChunks, { type: 'audio/webm' });
+          // Send to /transcribe
+          const form = new FormData();
+          form.append('file', blob, 'recording.webm');
+          try {
+            const res = await fetch('/transcribe', { method:'POST', body: form });
+            const data = await res.json();
+            manualInput.value = data.text || '';
+            log.textContent = data.text ? ('📝 Transcribed: ' + data.text) : '⚠️ No transcription. Please type keyword or try again.';
+          } catch (err){
+            manualInput.value = '';
+            log.textContent = '⚠️ Transcription failed. Type a keyword and press Generate Story.';
+          }
+        };
+        mediaRecorder.start();
+      } catch(e){
+        log.textContent = '⚠️ Microphone access denied or not available.';
+      }
+    } else {
+      // stop
+      mediaRecorder.stop();
+    }
+  });
+
+  // Generate story and play
+  sendBtn.addEventListener('click', async () => {
+    const keyword = manualInput.value.trim();
+    if (!keyword) { log.textContent = '⚠️ Please type or record a keyword first.'; return; }
+    log.textContent = `✨ Generating story about: "${keyword}" — this may take a few seconds...`;
+    // Disable buttons while generating
+    sendBtn.disabled = true; micBtn.style.pointerEvents = 'none';
+    try {
+      const payload = { keyword: keyword, length: lengthSelect.value };
+      const res = await fetch('/generate_story', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(txt || 'Generation failed');
+      }
+      const json = await res.json();
+      audioUrl = json.mp3_url;
+      setupPlayer(audioUrl);
+      log.textContent = '📖 Story generated. Playing...';
+      // show player and autoplay
+      playerBox.style.display = 'flex';
+      audioEl.src = audioUrl;
+      audioEl.play();
+      playBtn.textContent = '⏸';
+    } catch (err) {
+      console.error(err);
+      log.textContent = '❌ Story generation failed: ' + (err.message || err);
+      playerBox.style.display = 'none';
+    } finally {
+      sendBtn.disabled = false; micBtn.style.pointerEvents = '';
+    }
+  });
+
+  // Player controls
+  playBtn.addEventListener('click', () => {
+    if (audioEl.paused) {
+      audioEl.play();
+      playBtn.textContent = '⏸';
+    } else {
+      audioEl.pause();
+      playBtn.textContent = '▶';
+    }
+  });
+
+  audioEl.addEventListener('timeupdate', () => {
+    if (audioEl.duration) {
+      const pct = (audioEl.currentTime / audioEl.duration) * 100;
+      progress.value = pct;
+      timeEl.textContent = formatTime(audioEl.currentTime) + ' / ' + formatTime(audioEl.duration);
+    }
+  });
+  audioEl.addEventListener('ended', () => playBtn.textContent = '▶');
+
+  progress.addEventListener('input', () => {
+    if (audioEl.duration) {
+      const t = (progress.value / 100) * audioEl.duration;
+      audioEl.currentTime = t;
+    }
+  });
+
+  function setupPlayer(url){
+    downloadLink.href = url;
+    downloadLink.setAttribute('download', 'story.mp3');
+    playerBox.style.display = 'flex';
+  }
+
+  function formatTime(s){
+    if (!isFinite(s)) return '0:00';
+    const mm = Math.floor(s/60);
+    const ss = Math.floor(s%60).toString().padStart(2,'0');
+    return `${mm}:${ss}`;
+  }
+
+  // Small UX: press Enter to generate
+  manualInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') sendBtn.click();
+  });
+  </script>
+  </body>
+  </html>
