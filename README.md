@@ -1,193 +1,75 @@
-🎙️ StoryForge — AI-Powered Voice Story Narrator
+# StoryForge: AI Voice Story Narrator
 
-A modern, voice-controlled storytelling app with a beautiful glassmorphism UI, animated particles, and real-time audio generation.
+[![tests](https://github.com/Mudabbirarafat/storyforge-ai-voice-narrator/actions/workflows/tests.yml/badge.svg)](https://github.com/Mudabbirarafat/storyforge-ai-voice-narrator/actions/workflows/tests.yml)
 
-🚀 Overview
+Say or type a keyword, and StoryForge writes a short story about it with an LLM and reads it back to you as audio.
 
-StoryForge is a full-stack demo application that:
+![StoryForge UI](docs/screenshot.webp)
 
-Captures a voice keyword from the user
+## How it works
 
-Transcribes it (optional — manual input supported)
+```
+ mic recording ──► POST /transcribe ──► Whisper (Groq) ──► keyword
+                                                             │
+ typed keyword ──────────────────────────────────────────────┤
+                                                             ▼
+                  POST /generate_story ──► Llama 3.3 70B (Groq) ──► story text
+                                                             │
+                                                             ▼
+                                         gTTS ──► MP3 ──► GET /audio/<id>.mp3 ──► browser player
+```
 
-Generates a cinematic story using an LLM
+- **Backend:** FastAPI (`backend/app.py`). It also serves the single-page UI at `/`, so the whole app deploys as one service.
+- **Speech-to-text:** Whisper (`whisper-large-v3-turbo`) through the Groq API.
+- **Story generation:** Llama 3.3 70B through the Groq API, with a prompt tuned for a hook, a clear arc and a target length (short / medium / long).
+- **Text-to-speech:** gTTS, saved as MP3 and streamed to a custom audio player.
+- The Groq and gTTS clients are blocking, so the endpoints run them in a thread pool to keep the server responsive under concurrent requests.
 
-Converts the story into speech (TTS)
+## API
 
-Streams the MP3 back into a custom audio player
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| `POST` | `/transcribe` | `multipart/form-data` with `file` (audio, max 10 MB) | `{ "text": "dragon" }` |
+| `POST` | `/generate_story` | `{ "keyword": "dragon", "length": "short" \| "medium" \| "long" }` | `{ "mp3_url": "/audio/<id>.mp3", "story": "..." }` |
+| `GET` | `/audio/{id}.mp3` | | the narrated MP3 |
+| `GET` | `/health` | | `{ "status": "ok", "llm_configured": true }` |
 
-It includes:
+Input is validated with Pydantic (keyword 1 to 100 characters, length must be one of the three options). The audio route only serves files the app generated, so it can't be used to read other files on the server. Interactive docs are at `/docs` once the server is running.
 
-🧠 FastAPI backend (Python)
+## Run locally
 
-🖥️ Advanced glassmorphism frontend (HTML + CSS + JS)
+Requires Python 3.10+ and a free Groq API key from [console.groq.com/keys](https://console.groq.com/keys).
 
-🎙️ Voice recording & waveform animation
-
-🌗 Dark/Light theme toggle (saved in localStorage)
-
-✨ Animated background particle system
-
-🔊 Modern custom audio player
-
-🗣️ gTTS for TTS (backend unchanged)
-
-No backend modifications required — runs exactly as shipped.
-
-⭐ Features
-🖥️ Frontend
-
-Beautiful glassmorphism UI
-
-Soft gradient background + animated particles
-
-Animated mic button with pulse effect
-
-Real-time waveform animation
-
-Custom modern audio player (play, pause, download, progress)
-
-Theme toggle (light/dark) — remembers user preference
-
-SVG branding logo included
-
-Fully mobile-responsive
-
-Works without any API key (manual input mode)
-
-⚙️ Backend
-
-FastAPI server
-
-/transcribe endpoint (optional Whisper support)
-
-/generate_story using your LLM (Groq/OpenAI/etc.)
-
-gTTS-based MP3 generation
-
-Static audio serving via /audio/...
-
-Your backend works as-is — no changes needed.
-
-🧩 Project Structure
-storyforge_project/
-│
-├── backend/
-│   └── app.py           # FastAPI backend (unchanged)
-│
-├── frontend/
-│   └── index.html       # Fully upgraded UI
-│
-├── requirements.txt
-├── LICENSE
-└── README.md
-
-⚡ Quick Start
-1️⃣ Create virtual environment
+```bash
 python -m venv venv
-source venv/bin/activate        # mac/linux
-venv\Scripts\activate           # windows
-
-2️⃣ Install dependencies
+source venv/bin/activate          # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
-3️⃣ Start backend
+export GROQ_API_KEY=your-key       # Windows PowerShell: $env:GROQ_API_KEY="your-key"
 uvicorn backend.app:app --reload --port 8000
+```
 
-4️⃣ Open frontend
+Then open http://localhost:8000. See `.env.example` for optional settings.
 
-Simply open:
+## Tests
 
-frontend/index.html
+```bash
+pip install -r requirements-dev.txt
+pytest -q
+```
 
+The tests mock Groq and gTTS, so they run offline and cost nothing. They cover story generation, input validation, transcription, the missing-API-key path, and the audio route refusing anything that isn't a generated file. GitHub Actions runs them on every push.
 
-Or visit:
+## Deploy
 
-http://127.0.0.1:8000/
+`render.yaml` deploys the app to [Render](https://render.com) as one web service: create a new Blueprint from this repo and set `GROQ_API_KEY` when prompted. Generated MP3s live on the instance's disk, which is fine for a demo; a production version would put them in object storage.
 
-📡 API Endpoints (Backend)
-🔹 POST /transcribe
+## Ideas for next steps
 
-Accepts:
+- Stream the story and audio as they're generated instead of waiting for the full MP3
+- Genre and narrator-voice options
+- Store generated audio in S3 or similar and clean up old files
 
-multipart/form-data: file=<audio>
+## License
 
-
-Returns:
-
-{ "text": "keyword" }
-
-🔹 POST /generate_story
-
-Accepts:
-
-{ "keyword": "dragon", "length": "short|medium|long" }
-
-
-Returns:
-
-{ "mp3_url": "/audio/<file>.mp3" }
-
-🔹 GET /audio/<filename>
-
-Direct MP3 file serving.
-
-🛠️ How It Works Internally (Simple)
-
-User records keyword → browser captures audio
-
-Audio sent to /transcribe
-
-Resulting keyword (or manual input) sent to /generate_story
-
-Backend:
-
-Generates story with LLM
-
-Converts story → MP3 (gTTS)
-
-MP3 streamed back to custom audio player
-
-User hears narrated story
-
-🔧 Extending the Project
-
-You can upgrade the backend to support:
-
-✔ Higher-quality TTS
-
-Coqui TTS
-
-Amazon Polly
-
-ElevenLabs
-
-Azure TTS
-
-✔ Better ASR
-
-Whisper (OpenAI)
-
-Whisper.cpp (local)
-
-Vosk (offline)
-
-✔ Story modes
-
-Choose genre
-
-Choose narrator voice
-
-Multi-scene stories
-
-Story continuation
-
-✔ Real-time streaming
-
-Streaming LLM output → streaming TTS
-
-Ask anytime if you want help adding any of these.
-
-📄 License
-
-MIT License — free to use, modify, and distribute.
+MIT
