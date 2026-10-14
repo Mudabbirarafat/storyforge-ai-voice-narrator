@@ -1,0 +1,4 @@
+# Keep GitHub's language bar on Python rather than the single HTML UI file
+frontend/*.html linguist-detectable=false
+*.mp3 binary
+*.webp binary
