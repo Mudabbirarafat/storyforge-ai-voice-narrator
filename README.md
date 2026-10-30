@@ -1,5 +1,7 @@
 # StoryForge: AI Voice Story Narrator
 
+[![CI](https://github.com/Mudabbirarafat/storyforge-ai-voice-narrator/actions/workflows/ci.yml/badge.svg)](https://github.com/Mudabbirarafat/storyforge-ai-voice-narrator/actions/workflows/ci.yml)
+
 [![tests](https://github.com/Mudabbirarafat/storyforge-ai-voice-narrator/actions/workflows/tests.yml/badge.svg)](https://github.com/Mudabbirarafat/storyforge-ai-voice-narrator/actions/workflows/tests.yml)
 
 Say or type a keyword, and StoryForge writes a short story about it with an LLM and reads it back to you as audio.
